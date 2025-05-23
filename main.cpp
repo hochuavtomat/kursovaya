@@ -1,135 +1,113 @@
-echo "# kursovaya" >> README.md
-git init
-git add README.md
-git commit -m "first commit"
-git branch -M main
-git remote add origin https://github.com/hochuavtomat/kursovaya.git
-git push -u origin main
-
 #include <iostream>
+#include <fstream>
+#include <string>
 #include <queue>
-#include <map>           // Изменено с unordered_map на map для частот
+#include <unordered_map>
 #include <vector>
-#include <memory>
 
-// Переименована структура в TreeNode для ясности
-struct TreeNode {
-    char symbol;
-    int frequency;
-    std::shared_ptr<TreeNode> left, right;
+using namespace std;
 
-    TreeNode(char s, int f) : symbol(s), frequency(f), left(nullptr), right(nullptr) {}
-    TreeNode(int f) : symbol('\0'), frequency(f), left(nullptr), right(nullptr) {}
+// Структура узла дерева
+struct Node {
+    char ch;
+    int freq;
+    Node* left;
+    Node* right;
+
+    Node(char character, int frequency) : ch(character), freq(frequency), left(nullptr), right(nullptr) {}
 };
 
-struct CompareNodes {
-    bool operator()(const std::shared_ptr<TreeNode>& a, const std::shared_ptr<TreeNode>& b) {
-        return a->frequency > b->frequency;  // Очередь с приоритетом по минимальной частоте
+// Компаратор для приоритетной очереди
+struct Compare {
+    bool operator()(Node* left, Node* right) {
+        return left->freq > right->freq; // Узел с меньшей частотой имеет более высокий приоритет
     }
 };
 
-// Добавлена функция для построения дерева
-std::shared_ptr<TreeNode> buildHuffmanTree(const std::map<char, int>& freqMap) {
-    std::priority_queue<std::shared_ptr<TreeNode>, std::vector<std::shared_ptr<TreeNode>>, CompareNodes> minHeap;
-    
+// Функция для построения дерева Хаффмана
+Node* buildHuffmanTree(const unordered_map<char, int>& freqMap) {
+    priority_queue<Node*, vector<Node*>, Compare> minHeap;
+
+    // Создаем узлы для каждого символа и добавляем их в кучу
     for (const auto& pair : freqMap) {
-        minHeap.push(std::make_shared<TreeNode>(pair.first, pair.second));
+        minHeap.push(new Node(pair.first, pair.second));
     }
 
+    // Построение дерева
     while (minHeap.size() > 1) {
-        auto left = minHeap.top();
-        minHeap.pop();
-        auto right = minHeap.top();
-        minHeap.pop();
-        
-        auto internalNode = std::make_shared<TreeNode>(left->frequency + right->frequency);
-        internalNode->left = left;
-        internalNode->right = right;
-        
-        minHeap.push(internalNode);
+        Node* left = minHeap.top(); minHeap.pop();
+        Node* right = minHeap.top(); minHeap.pop();
+
+        Node* newNode = new Node('0', left->freq + right->freq);
+        newNode->left = left;
+        newNode->right = right;
+
+        minHeap.push(newNode);
     }
-    
-    return minHeap.empty() ? nullptr : minHeap.top();
+
+    return minHeap.top(); // Корень дерева
 }
 
-// Изменены биты: левый - '1', правый - '0'
-void generateHuffmanCodes(const std::shared_ptr<TreeNode>& node, const std::string& code, std::map<char, std::string>& codes) {
-    if (!node) return;
-    
-    if (!node->left && !node->right) {
-        codes[node->symbol] = code;
+// Функция для получения кодов Хаффмана
+void getHuffmanCodes(Node* root, const string& str, unordered_map<char, string>& huffmanCodes) {
+    if (!root) return;
+
+    // Если узел является листом, сохраняем код
+    if (root->left == nullptr && root->right == nullptr) {
+        huffmanCodes[root->ch] = str;
     }
-    
-    generateHuffmanCodes(node->left, code + "1", codes);  // Изменено здесь
-    generateHuffmanCodes(node->right, code + "0", codes); // И здесь
+
+    getHuffmanCodes(root->left, str + "0", huffmanCodes);
+    getHuffmanCodes(root->right, str + "1", huffmanCodes);
 }
 
-// Добавлена проверка на отсутствующие символы
-std::string encodeData(const std::string& input, const std::map<char, std::string>& codes) {
-    std::string result;
-    for (char ch : input) {
-        auto it = codes.find(ch);
-        if (it == codes.end()) {
-            throw std::runtime_error("Symbol not found in codes!");
-        }
-        result += it->second;
+// Функция для кодирования строки
+string encode(const string& text, const unordered_map<char, string>& huffmanCodes) {
+    string encodedString;
+    for (char ch : text) {
+        encodedString += huffmanCodes.at(ch);
     }
-    return result;
+    return encodedString;
 }
 
-// Изменены условия перемещения по дереву
-std::string decodeData(const std::string& encodedStr, const std::shared_ptr<TreeNode>& root) {
-    std::string result;
-    auto currentNode = root;
-    
-    for (char bit : encodedStr) {
-        if (bit == '1') {                   // Изменено здесь
-            currentNode = currentNode->left;
-        } else {
-            currentNode = currentNode->right;
-        }
-        
-        if (!currentNode->left && !currentNode->right) {
-            result += currentNode->symbol;
-            currentNode = root;
-        }
-    }
-    
-    return result;
+// Функция для освобождения памяти
+void deleteTree(Node* root) {
+    if (root == nullptr) return;
+    deleteTree(root->left);
+    deleteTree(root->right);
+    delete root;
 }
 
 int main() {
-    std::string inputData = "abacabad";
-    
-    // Подсчёт частот с использованием map (отсортированный)
-    std::map<char, int> frequencies;
-    for (char ch : inputData) {
-        frequencies[ch]++;
+    string text = "this is an example for huffman encoding";
+
+    // Подсчет частоты символов
+    unordered_map<char, int> freqMap;
+    for (char ch : text) {
+        freqMap[ch]++;
     }
-    
-    // Построение дерева
-    auto huffmanRoot = buildHuffmanTree(frequencies);
-    
-    // Генерация кодов
-    std::map<char, std::string> codeTable;
-    generateHuffmanCodes(huffmanRoot, "", codeTable);
-    
-    // Вывод таблицы кодов
-    std::cout << "Таблица кодов:\n";
-    for (const auto& pair : codeTable) {
-        std::cout << "'" << pair.first << "' : " << pair.second << "\n";
+
+    // Построение дерева Хаффмана
+    Node* root = buildHuffmanTree(freqMap);
+
+    // Получение кодов Хаффмана
+    unordered_map<char, string> huffmanCodes;
+    getHuffmanCodes(root, "", huffmanCodes);
+
+    // Кодирование текста
+    string encodedString = encode(text, huffmanCodes);
+
+    // Вывод результатов
+    cout << "Исходный текст: " << text << endl;
+    cout << "Закодированная строка: " << encodedString << endl;
+
+    cout << "Коды Хаффмана:" << endl;
+    for (const auto& pair : huffmanCodes) {
+        cout << pair.first << ": " << pair.second << endl;
     }
-    
-    // Кодирование
-    std::string encoded = encodeData(inputData, codeTable);
-    std::cout << "\nЗакодированная строка: " << encoded << std::endl;
-    
-    // Декодирование
-    std::string decoded = decodeData(encoded, huffmanRoot);
-    std::cout << "Раскодированная строка: " << decoded << std::endl;
-    
-    // Проверка
-    std::cout << "\nРезультат проверки: " << (inputData == decoded ? "Успех!" : "Ошибка!") << std::endl;
+
+    // Освобождение памяти
+    deleteTree(root);
 
     return 0;
 }
